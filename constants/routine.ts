@@ -1,5 +1,5 @@
 // ============================================================
-// Golf Performance OS — Practice Routine Data Model
+// GoLo — Practice Routine Data Model
 // Source of truth. All session screens derive from this.
 // ============================================================
 

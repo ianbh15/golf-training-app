@@ -115,7 +115,7 @@ export default function CoachScreen() {
             Intelligence Layer
           </Text>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#F0F2F0' }}>
-            AI Coach
+            GoLo Coach
           </Text>
         </View>
 

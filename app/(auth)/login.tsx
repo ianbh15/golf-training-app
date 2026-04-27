@@ -48,29 +48,21 @@ export default function LoginScreen() {
         }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / wordmark */}
-        <View style={{ marginBottom: 48 }}>
+        {/* Wordmark */}
+        <View style={{ marginBottom: 48, alignItems: 'flex-start' }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 52, color: '#F0F2F0', lineHeight: 56 }}>
+            GoL<Text style={{ color: '#4ADE80' }}>o</Text>
+          </Text>
           <Text
             style={{
               fontFamily: 'DMMono_500Medium',
               fontSize: 11,
-              color: '#4ADE80',
-              letterSpacing: 4,
-              textTransform: 'uppercase',
-              marginBottom: 8,
+              color: '#4A4E4C',
+              letterSpacing: 3,
+              marginTop: 6,
             }}
           >
-            Golf Performance OS
-          </Text>
-          <Text
-            style={{
-              fontFamily: 'Outfit_700Bold',
-              fontSize: 28,
-              color: '#F0F2F0',
-              lineHeight: 34,
-            }}
-          >
-            Welcome back,{'\n'}Ian.
+            Log. Learn. GoLo.
           </Text>
         </View>
 

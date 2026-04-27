@@ -1,4 +1,4 @@
--- Golf Performance OS — Supabase Schema Migration
+-- GoLo — Supabase Schema Migration
 -- Run this in your Supabase SQL Editor
 
 -- ============================================================
