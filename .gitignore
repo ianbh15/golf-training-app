@@ -4,6 +4,7 @@ dist/
 web-build/
 .env
 .env.local
+.claude/
 *.log
 .DS_Store
 Thumbs.db

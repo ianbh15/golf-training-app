@@ -188,17 +188,9 @@ export default function TodayScreen() {
           >
             {todayDisplay()}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12 }}>
-            <Text
-              style={{
-                fontFamily: 'Outfit_700Bold',
-                fontSize: 28,
-                color: '#F0F2F0',
-              }}
-            >
-              Golf Performance OS
-            </Text>
-          </View>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 32, color: '#F0F2F0', lineHeight: 36 }}>
+            GoL<Text style={{ color: '#4ADE80' }}>o</Text>
+          </Text>
           {latestHandicap && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 }}>
               <Text

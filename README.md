@@ -1,5 +1,7 @@
-# Golf Performance OS
+# GoLo
 
+> **Log. Learn. GoLo.**
+>
 > A mobile-first performance tool for a 3-handicap golfer. Practice accountability + round pattern recognition + AI synthesis = lower scores.
 
 **Not a beginner app.** Built for one specific practice routine. Think Whoop meets a caddie yardage book.
@@ -27,8 +29,8 @@
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/ianbh15/golf-training-app.git
-cd golf-training-app
+git clone https://github.com/ianbh15/golo.git
+cd golo
 npm install --legacy-peer-deps
 ```
 
@@ -122,4 +124,4 @@ supabase/
 
 ---
 
-*Golf Performance OS · Ian Hodge · April 2026*
+*GoLo · Ian Hodge · April 2026*

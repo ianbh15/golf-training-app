@@ -1,5 +1,5 @@
 // ============================================================
-// Golf Performance OS — Claude AI Coach Wrapper
+// GoLo — Claude AI Coach Wrapper
 // 
 // SECURITY NOTE: In production, all Claude calls must go through
 // Supabase Edge Functions to keep ANTHROPIC_API_KEY server-side.

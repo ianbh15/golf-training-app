@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Golf Performance OS",
-    "slug": "golf-training-app",
+    "name": "GoLo",
+    "slug": "golo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "golfos",
+    "scheme": "golo",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -14,14 +14,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ianhodge.golfos"
+      "bundleIdentifier": "com.ianhodge.golo"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0D0F0E"
       },
-      "package": "com.ianhodge.golfos"
+      "package": "com.ianhodge.golo"
     },
     "web": {
       "bundler": "metro",
@@ -39,7 +39,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#0D0F0E"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
