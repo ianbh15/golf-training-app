@@ -16,6 +16,12 @@ import { supabase } from '../../../lib/supabase';
 import { useRoundStore } from '../../../lib/store/roundStore';
 import { SectionHeader } from '../../../components/ui/SectionHeader';
 import { QualityRating } from '../../../components/ui/QualityRating';
+import { Card } from '../../../components/ui/Card';
+import {
+  buildRoundDebriefContext,
+  generateAndSaveInsight,
+} from '../../../lib/aiHelpers';
+import type { Round } from '../../../lib/types/database';
 
 // ── Shared styles ──
 const labelStyle = {
@@ -41,7 +47,6 @@ const inputStyle = {
 
 const rowStyle = { marginBottom: 16 };
 
-// ── Helper ──
 function SGInput({
   label,
   value,
@@ -66,12 +71,135 @@ function SGInput({
   );
 }
 
+// ──────────────────────────────────────────────────────────
+// Inline debrief view shown after a round is saved
+// ──────────────────────────────────────────────────────────
+
+function DebriefView({
+  round,
+  debrief,
+  loading,
+  onDone,
+}: {
+  round: Round;
+  debrief: string | null;
+  loading: boolean;
+  onDone: () => void;
+}) {
+  return (
+    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+      {/* Confirmation */}
+      <View style={{ alignItems: 'center', marginBottom: 28, marginTop: 12 }}>
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: '#14532D',
+            borderWidth: 1,
+            borderColor: '#4ADE80',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ fontFamily: 'DMMono_500Medium', fontSize: 22, color: '#4ADE80' }}>✓</Text>
+        </View>
+        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#F0F2F0', marginBottom: 4 }}>
+          Round Saved
+        </Text>
+        <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 12, color: '#8A8F8C' }}>
+          {round.course_name} · {round.gross_score}
+        </Text>
+      </View>
+
+      {/* AI Debrief */}
+      <Card style={{ marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+          <Text
+            style={{
+              fontFamily: 'DMMono_500Medium',
+              fontSize: 10,
+              color: '#4ADE80',
+              textTransform: 'uppercase',
+              letterSpacing: 2,
+            }}
+          >
+            Coach · Round Debrief
+          </Text>
+        </View>
+
+        {loading ? (
+          <View style={{ paddingVertical: 24, alignItems: 'center', gap: 12 }}>
+            <ActivityIndicator color="#4ADE80" />
+            <Text style={{ fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#4A4E4C' }}>
+              Analysing your round…
+            </Text>
+          </View>
+        ) : debrief ? (
+          <Text
+            style={{
+              fontFamily: 'Outfit_400Regular',
+              fontSize: 14,
+              color: '#F0F2F0',
+              lineHeight: 22,
+            }}
+          >
+            {debrief}
+          </Text>
+        ) : (
+          <Text
+            style={{
+              fontFamily: 'Outfit_400Regular',
+              fontSize: 14,
+              color: '#4A4E4C',
+              lineHeight: 22,
+            }}
+          >
+            Coach unavailable — check your API key and connection.
+          </Text>
+        )}
+      </Card>
+
+      <TouchableOpacity
+        onPress={onDone}
+        accessibilityLabel="Done"
+        style={{
+          height: 50,
+          backgroundColor: '#1A1D1B',
+          borderWidth: 1,
+          borderColor: '#2A2E2C',
+          borderRadius: 4,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: 'Outfit_700Bold',
+            fontSize: 14,
+            color: '#8A8F8C',
+            letterSpacing: 1,
+          }}
+        >
+          DONE
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
 // ── Screen ──
 export default function LogRoundScreen() {
   const { draft, updateDraft, saveRound, isSaving, error, recentCourses, fetchRounds } =
     useRoundStore();
   const [userId, setUserId] = useState<string | null>(null);
   const [showCourseSuggestions, setShowCourseSuggestions] = useState(false);
+
+  // Post-save state
+  const [savedRound, setSavedRound] = useState<Round | null>(null);
+  const [debrief, setDebrief] = useState<string | null>(null);
+  const [debriefLoading, setDebriefLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -94,10 +222,29 @@ export default function LogRoundScreen() {
     }
 
     const id = await saveRound(userId);
-    if (id) {
-      Alert.alert('Round logged', 'Your round has been saved.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+    if (!id) return; // error shown via store.error
+
+    // Fetch the saved round to build debrief context
+    const { data: round } = await supabase
+      .from('rounds')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!round) return;
+
+    setSavedRound(round);
+    setDebriefLoading(true);
+
+    // Generate debrief in background — never crash
+    try {
+      const context = await buildRoundDebriefContext(userId, round);
+      const insight = await generateAndSaveInsight(userId, 'round_debrief', context);
+      setDebrief(insight?.content ?? null);
+    } catch {
+      setDebrief(null);
+    } finally {
+      setDebriefLoading(false);
     }
   };
 
@@ -105,6 +252,37 @@ export default function LogRoundScreen() {
     c.toLowerCase().includes(draft.courseName.toLowerCase())
   );
 
+  // ── Post-save view ──
+  if (savedRound) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0D0F0E' }}>
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 16,
+            paddingBottom: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: '#2A2E2C',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: '#F0F2F0' }}>
+            Round Debrief
+          </Text>
+        </View>
+        <DebriefView
+          round={savedRound}
+          debrief={debrief}
+          loading={debriefLoading}
+          onDone={() => router.back()}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Form view ──
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0D0F0E' }}>
       <KeyboardAvoidingView

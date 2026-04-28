@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -16,6 +17,11 @@ import {
   getNextPracticeDay,
   getRoutineForDay,
 } from '../../constants/routine';
+import {
+  getTodaysPreSessionInsight,
+  buildPreSessionContext,
+  generateAndSaveInsight,
+} from '../../lib/aiHelpers';
 import type { Round, AiInsight, HandicapEntry } from '../../lib/types/database';
 
 // ──────────────────────────────────────────────────────────
@@ -61,6 +67,10 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [insightExpanded, setInsightExpanded] = useState(false);
 
+  // Pre-session cue state
+  const [preSessionCue, setPreSessionCue] = useState<AiInsight | null>(null);
+  const [cueLoading, setCueLoading] = useState(false);
+
   const todayDay = getTodayPracticeDay();
   const routine = todayDay ? getRoutineForDay(todayDay) : null;
 
@@ -78,7 +88,7 @@ export default function TodayScreen() {
         .from('ai_insights')
         .select('*')
         .eq('user_id', uid)
-        .in('insight_type', ['pre_session', 'weekly_summary'])
+        .in('insight_type', ['weekly_summary'])
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -91,7 +101,6 @@ export default function TodayScreen() {
         .limit(1)
         .maybeSingle(),
 
-      // Count consecutive weeks (last 8 weeks) with all 3 sessions
       supabase
         .from('practice_sessions')
         .select('session_date, day_type')
@@ -103,10 +112,34 @@ export default function TodayScreen() {
     if (roundRes.data) setLatestRound(roundRes.data);
     if (insightRes.data) setLatestInsight(insightRes.data);
     if (handicapRes.data) setLatestHandicap(handicapRes.data);
+    if (streakRes.data) setStreak(computeStreak(streakRes.data));
+  };
 
-    // Compute streak (consecutive weeks with tue+wed+thu)
-    if (streakRes.data) {
-      setStreak(computeStreak(streakRes.data));
+  // Generate or load pre-session cue for today
+  const fetchPreSessionCue = async (uid: string) => {
+    if (!todayDay || !routine) return;
+
+    // Check cache first
+    const cached = await getTodaysPreSessionInsight(uid);
+    if (cached) {
+      setPreSessionCue(cached);
+      return;
+    }
+
+    // Generate in background
+    setCueLoading(true);
+    try {
+      const context = await buildPreSessionContext(
+        uid,
+        todayDay,
+        routine.blocks.map((b) => ({ key: b.key, name: b.name, swingKeyCritical: b.swingKeyCritical }))
+      );
+      const insight = await generateAndSaveInsight(uid, 'pre_session', context);
+      if (insight) setPreSessionCue(insight);
+    } catch {
+      // Fail silently — cue is non-critical
+    } finally {
+      setCueLoading(false);
     }
   };
 
@@ -114,12 +147,9 @@ export default function TodayScreen() {
     sessions: { session_date: string; day_type: string }[]
   ): number {
     if (!sessions.length) return 0;
-
-    // Group by ISO week
     const weekMap = new Map<string, Set<string>>();
     sessions.forEach(({ session_date, day_type }) => {
       const d = new Date(session_date);
-      // ISO week key: year-week
       const jan4 = new Date(d.getFullYear(), 0, 4);
       const week = Math.ceil(
         ((d.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7
@@ -133,11 +163,7 @@ export default function TodayScreen() {
     const sortedWeeks = [...weekMap.keys()].sort().reverse();
     for (const week of sortedWeeks) {
       const days = weekMap.get(week)!;
-      if (
-        days.has('tuesday') &&
-        days.has('wednesday') &&
-        days.has('thursday')
-      ) {
+      if (days.has('tuesday') && days.has('wednesday') && days.has('thursday')) {
         streak++;
       } else {
         break;
@@ -151,6 +177,7 @@ export default function TodayScreen() {
       if (data.user) {
         setUserId(data.user.id);
         fetchData(data.user.id);
+        fetchPreSessionCue(data.user.id);
       }
     });
   }, []);
@@ -167,11 +194,7 @@ export default function TodayScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#4ADE80"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ADE80" />
         }
       >
         {/* ── Header ── */}
@@ -193,22 +216,10 @@ export default function TodayScreen() {
           </Text>
           {latestHandicap && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 }}>
-              <Text
-                style={{
-                  fontFamily: 'DMMono_400Regular',
-                  fontSize: 12,
-                  color: '#8A8F8C',
-                }}
-              >
+              <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 12, color: '#8A8F8C' }}>
                 HCP INDEX
               </Text>
-              <Text
-                style={{
-                  fontFamily: 'DMMono_500Medium',
-                  fontSize: 20,
-                  color: '#4ADE80',
-                }}
-              >
+              <Text style={{ fontFamily: 'DMMono_500Medium', fontSize: 20, color: '#4ADE80' }}>
                 {latestHandicap.handicap_index.toFixed(1)}
               </Text>
             </View>
@@ -230,13 +241,7 @@ export default function TodayScreen() {
               >
                 {routine.day.toUpperCase()} SESSION
               </Text>
-              <Text
-                style={{
-                  fontFamily: 'DMMono_400Regular',
-                  fontSize: 10,
-                  color: '#4A4E4C',
-                }}
-              >
+              <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 10, color: '#4A4E4C' }}>
                 {routine.totalMinutes} MIN
               </Text>
             </View>
@@ -302,15 +307,47 @@ export default function TodayScreen() {
             >
               Rest Day
             </Text>
-            <Text
-              style={{
-                fontFamily: 'Outfit_700Bold',
-                fontSize: 16,
-                color: '#F0F2F0',
-              }}
-            >
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#F0F2F0' }}>
               Next session: {getNextPracticeDay()}
             </Text>
+          </Card>
+        )}
+
+        {/* ── Coach Says (pre-session cue) ── */}
+        {todayDay && (cueLoading || preSessionCue) && (
+          <Card style={{ marginBottom: 16 }}>
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 10,
+                color: '#4ADE80',
+                textTransform: 'uppercase',
+                letterSpacing: 2,
+                marginBottom: 8,
+                opacity: 0.7,
+              }}
+            >
+              Coach says
+            </Text>
+            {cueLoading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator color="#4ADE80" size="small" />
+                <Text style={{ fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#4A4E4C' }}>
+                  Getting your focus cue…
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontFamily: 'Outfit_400Regular',
+                  fontSize: 14,
+                  color: '#F0F2F0',
+                  lineHeight: 22,
+                }}
+              >
+                {preSessionCue!.content}
+              </Text>
+            )}
           </Card>
         )}
 
@@ -318,32 +355,14 @@ export default function TodayScreen() {
         {streak > 0 && (
           <Card style={{ marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Text
-                style={{
-                  fontFamily: 'DMMono_500Medium',
-                  fontSize: 28,
-                  color: '#4ADE80',
-                }}
-              >
+              <Text style={{ fontFamily: 'DMMono_500Medium', fontSize: 28, color: '#4ADE80' }}>
                 {streak}
               </Text>
               <View>
-                <Text
-                  style={{
-                    fontFamily: 'Outfit_700Bold',
-                    fontSize: 14,
-                    color: '#F0F2F0',
-                  }}
-                >
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#F0F2F0' }}>
                   Week{streak !== 1 ? 's' : ''} Complete
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: 'Outfit_400Regular',
-                    fontSize: 12,
-                    color: '#8A8F8C',
-                  }}
-                >
+                <Text style={{ fontFamily: 'Outfit_400Regular', fontSize: 12, color: '#8A8F8C' }}>
                   Consecutive full weeks (Tue · Wed · Thu)
                 </Text>
               </View>
@@ -379,13 +398,7 @@ export default function TodayScreen() {
                 >
                   {latestRound.course_name}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: 'Outfit_400Regular',
-                    fontSize: 12,
-                    color: '#8A8F8C',
-                  }}
-                >
+                <Text style={{ fontFamily: 'Outfit_400Regular', fontSize: 12, color: '#8A8F8C' }}>
                   {formatDateShort(latestRound.played_date)}
                 </Text>
               </View>
@@ -401,13 +414,7 @@ export default function TodayScreen() {
                   {latestRound.gross_score}
                 </Text>
                 {latestRound.handicap_differential != null && (
-                  <Text
-                    style={{
-                      fontFamily: 'DMMono_400Regular',
-                      fontSize: 11,
-                      color: '#4A4E4C',
-                    }}
-                  >
+                  <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 11, color: '#4A4E4C' }}>
                     +{latestRound.handicap_differential} diff
                   </Text>
                 )}
@@ -417,14 +424,7 @@ export default function TodayScreen() {
               latestRound.sg_approach != null ||
               latestRound.sg_around_green != null ||
               latestRound.sg_putting != null) && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                  marginTop: 12,
-                  flexWrap: 'wrap',
-                }}
-              >
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {[
                   { label: 'OTT', value: latestRound.sg_off_tee },
                   { label: 'APP', value: latestRound.sg_approach },
@@ -444,7 +444,7 @@ export default function TodayScreen() {
           </Card>
         )}
 
-        {/* ── AI Insight Card ── */}
+        {/* ── Latest Weekly Summary ── */}
         {latestInsight && (
           <TouchableOpacity onPress={() => setInsightExpanded((v) => !v)} activeOpacity={0.85}>
             <Card style={{ marginBottom: 16 }}>
@@ -460,13 +460,7 @@ export default function TodayScreen() {
                 >
                   Coach · {latestInsight.insight_type.replace('_', ' ')}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: 'DMMono_400Regular',
-                    fontSize: 10,
-                    color: '#4A4E4C',
-                  }}
-                >
+                <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 10, color: '#4A4E4C' }}>
                   {formatDate(latestInsight.generated_at)}
                 </Text>
               </View>
