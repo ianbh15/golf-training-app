@@ -17,6 +17,48 @@ Keep responses under 250 words unless asked a specific question.
 Ian's swing key focus: lower body fires first, hips rotate before shoulders and hands move.
 Tone: direct, analytical, no fluff — like a Tour caddie who has studied the data.`;
 
+const PLAN_SYSTEM_PROMPT = `You are a golf practice plan architect.
+You design structured, drill-based weekly practice plans for skilled golfers.
+You must return ONLY valid JSON — no markdown fences, no commentary, no prose.
+Plans must be specific, time-budgeted, and metric-driven.
+Tone in the JSON content fields: direct, no fluff, like a Tour caddie's notebook.`;
+
+const PLAN_JSON_SHAPE = `Return JSON with this exact shape:
+[
+  {
+    "day": "tuesday",
+    "focus": "Ball Striking",
+    "totalMinutes": 40,
+    "swingKey": "<one-sentence swing focus for the day>",
+    "blocks": [
+      {
+        "key": "<unique snake_case id, e.g. tuesday_warmup>",
+        "name": "<short block title>",
+        "durationMin": 4,
+        "description": "<one-line block description>",
+        "swingKeyCritical": true,
+        "neverCut": false,
+        "metric": {
+          "label": "<short label, e.g. Targets Hit>",
+          "target": "<concrete target, e.g. 4/6 or better>",
+          "inputType": "fraction",
+          "numerator": 0,
+          "denominator": 6
+        },
+        "drills": ["<drill 1>", "<drill 2>", "<drill 3>"]
+      }
+    ]
+  }
+]
+
+Rules:
+- Every day has a "day" field (lowercase weekday string), "focus", "totalMinutes" (sum of block durations), "swingKey", and a "blocks" array.
+- Each block has all fields shown. "metric" is optional — omit the field entirely if the block has no measurable target.
+- "inputType" must be one of "fraction", "boolean", or "text".
+- For "fraction" metrics include numerator (0) and denominator. Otherwise omit those.
+- Mark exactly one or two blocks per day with "neverCut": true — the highest-priority block(s).
+- Drill arrays should have 2–5 short imperative bullets.`;
+
 serve(async (req: Request) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -35,7 +77,79 @@ serve(async (req: Request) => {
 
     const { type, context, userMessage } = await req.json();
 
-    // Build prompt
+    // ── Plan generation: structured JSON output ──
+    if (type === 'plan_generation') {
+      const {
+        handicap,
+        goals,
+        daysPerWeek,
+        sessionMinutes,
+        weaknesses,
+      }: {
+        handicap?: number;
+        goals?: string[];
+        daysPerWeek?: number;
+        sessionMinutes?: number;
+        weaknesses?: string;
+      } = context ?? {};
+
+      const userPrompt = `Build a custom weekly practice plan for this golfer.
+
+Handicap: ${handicap ?? 'unspecified'}
+Primary goals: ${goals?.join(', ') || 'general improvement'}
+Days available per week: ${daysPerWeek ?? 3}
+Session length: ${sessionMinutes ?? 40} minutes per session
+Specific weaknesses: ${weaknesses || 'none specified'}
+
+${PLAN_JSON_SHAPE}
+
+Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approximately ${sessionMinutes ?? 40} minutes. Tailor day focuses and blocks to the goals and weaknesses listed.`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          system: PLAN_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      const data = await response.json();
+      const raw: string = data?.content?.[0]?.text ?? '';
+
+      // Strip accidental markdown fences if Claude added any
+      const cleaned = raw
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+
+      let plan: unknown;
+      try {
+        plan = JSON.parse(cleaned);
+      } catch {
+        return new Response(
+          JSON.stringify({ error: 'Model did not return valid JSON', raw }),
+          {
+            status: 502,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          }
+        );
+      }
+
+      return new Response(JSON.stringify({ plan }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    // ── Text-content insights (existing behavior) ──
     let userPrompt: string;
     if (userMessage) {
       userPrompt = userMessage;

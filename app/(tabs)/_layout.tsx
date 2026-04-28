@@ -7,14 +7,14 @@ import { supabase } from '../../lib/supabase';
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4 }}>
+    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 8, minWidth: 64 }}>
       <Text
         style={{
           fontFamily: 'DMMono_500Medium',
-          fontSize: 8,
+          fontSize: 12,
           color: focused ? '#4ADE80' : '#4A4E4C',
           textTransform: 'uppercase',
-          letterSpacing: 1.5,
+          letterSpacing: 1.8,
         }}
       >
         {label}
@@ -22,10 +22,10 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
       {focused && (
         <View
           style={{
-            width: 18,
-            height: 1,
+            width: 24,
+            height: 2,
             backgroundColor: '#4ADE80',
-            marginTop: 3,
+            marginTop: 6,
           }}
         />
       )}
@@ -59,8 +59,9 @@ export default function TabLayout() {
           backgroundColor: '#0D0F0E',
           borderTopWidth: 1,
           borderTopColor: '#2A2E2C',
-          height: 60,
-          paddingBottom: 8,
+          height: 84,
+          paddingBottom: 18,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: '#4ADE80',
         tabBarInactiveTintColor: '#4A4E4C',

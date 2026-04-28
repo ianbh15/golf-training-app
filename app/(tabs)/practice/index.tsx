@@ -4,73 +4,283 @@ import {
   View,
   Text,
   TouchableOpacity,
-  RefreshControl,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+import { usePlanStore } from '../../../lib/store/planStore';
 import { Card } from '../../../components/ui/Card';
-import { getTodayPracticeDay, getRoutineForDay } from '../../../constants/routine';
-import type { PracticeSession } from '../../../lib/types/database';
+import type { DayRoutine, BlockType } from '../../../constants/routine';
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
+const DAY_LABEL: Record<string, string> = {
+  tuesday: 'TUESDAY',
+  wednesday: 'WEDNESDAY',
+  thursday: 'THURSDAY',
+};
+
+function DayCard({
+  day,
+  expanded,
+  onToggle,
+}: {
+  day: DayRoutine;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Card style={{ marginBottom: 12, padding: 0 }}>
+      {/* Header — tap to collapse */}
+      <TouchableOpacity
+        onPress={onToggle}
+        activeOpacity={0.85}
+        accessibilityLabel={`Toggle ${day.day} plan`}
+        style={{ padding: 16 }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 11,
+                color: '#4ADE80',
+                letterSpacing: 2.5,
+                marginBottom: 4,
+              }}
+            >
+              {DAY_LABEL[day.day] ?? day.day.toUpperCase()}
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Outfit_700Bold',
+                fontSize: 20,
+                color: '#F0F2F0',
+              }}
+            >
+              {day.focus}
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Outfit_400Regular',
+                fontSize: 12,
+                color: '#8A8F8C',
+                marginTop: 2,
+              }}
+            >
+              {day.totalMinutes} min · {day.blocks.length} blocks
+            </Text>
+          </View>
+          <Text style={{ fontFamily: 'DMMono_500Medium', fontSize: 16, color: '#4A4E4C' }}>
+            {expanded ? '−' : '+'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+          {/* Swing key — prominent at top of expanded section */}
+          <View
+            style={{
+              borderLeftWidth: 2,
+              borderLeftColor: '#4ADE80',
+              paddingLeft: 12,
+              marginBottom: 16,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 9,
+                color: '#4ADE80',
+                letterSpacing: 2,
+                marginBottom: 4,
+              }}
+            >
+              SWING KEY
+            </Text>
+            <Text
+              style={{
+                fontFamily: 'Outfit_400Regular',
+                fontSize: 13,
+                color: '#F0F2F0',
+                lineHeight: 19,
+              }}
+            >
+              {day.swingKey}
+            </Text>
+          </View>
+
+          {day.blocks.map((block) => (
+            <BlockRow key={block.key} block={block} />
+          ))}
+        </View>
+      )}
+    </Card>
+  );
 }
 
-function qualityColor(q: number | null): string {
-  if (!q) return '#4A4E4C';
-  if (q >= 4) return '#4ADE80';
-  if (q >= 3) return '#F0F2F0';
-  return '#F59E0B';
+function BlockRow({ block }: { block: BlockType }) {
+  return (
+    <View
+      style={{
+        borderTopWidth: 1,
+        borderTopColor: '#2A2E2C',
+        paddingVertical: 12,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+            <Text
+              style={{
+                fontFamily: 'Outfit_700Bold',
+                fontSize: 14,
+                color: '#F0F2F0',
+              }}
+            >
+              {block.name}
+            </Text>
+            {block.neverCut && (
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#F59E0B',
+                  paddingHorizontal: 6,
+                  paddingVertical: 1,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: 'DMMono_500Medium',
+                    fontSize: 8,
+                    color: '#F59E0B',
+                    letterSpacing: 1.5,
+                  }}
+                >
+                  NEVER CUT
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text
+            style={{
+              fontFamily: 'Outfit_400Regular',
+              fontSize: 12,
+              color: '#8A8F8C',
+              marginBottom: 8,
+            }}
+          >
+            {block.description}
+          </Text>
+        </View>
+        <Text
+          style={{
+            fontFamily: 'DMMono_500Medium',
+            fontSize: 12,
+            color: '#4A4E4C',
+          }}
+        >
+          {block.durationMin}m
+        </Text>
+      </View>
+
+      {block.metric && (
+        <View
+          style={{
+            backgroundColor: '#0D0F0E',
+            borderWidth: 1,
+            borderColor: '#2A2E2C',
+            borderRadius: 4,
+            padding: 8,
+            marginBottom: 8,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: 'DMMono_500Medium',
+              fontSize: 9,
+              color: '#8A8F8C',
+              letterSpacing: 1.5,
+              marginBottom: 2,
+            }}
+          >
+            METRIC · {block.metric.label.toUpperCase()}
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Outfit_400Regular',
+              fontSize: 12,
+              color: '#F0F2F0',
+            }}
+          >
+            Target: {block.metric.target}
+          </Text>
+        </View>
+      )}
+
+      {block.drills.map((drill, i) => (
+        <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }}>
+          <Text
+            style={{
+              fontFamily: 'DMMono_400Regular',
+              fontSize: 11,
+              color: '#4A4E4C',
+              marginRight: 8,
+              marginTop: 2,
+            }}
+          >
+            ·
+          </Text>
+          <Text
+            style={{
+              fontFamily: 'Outfit_400Regular',
+              fontSize: 13,
+              color: '#F0F2F0',
+              flex: 1,
+              lineHeight: 18,
+            }}
+          >
+            {drill}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
-function dayLabel(day: string): string {
-  return { tuesday: 'TUE · Ball Striking', wednesday: 'WED · Short Game', thursday: 'THU · Scoring' }[day] ?? day.toUpperCase();
-}
-
-export default function PracticeHistoryScreen() {
-  const [sessions, setSessions] = useState<PracticeSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+export default function PracticePlanScreen() {
+  const { activePlan, routine, loading, loadActivePlan } = usePlanStore();
   const [userId, setUserId] = useState<string | null>(null);
-
-  const fetchSessions = async (uid: string) => {
-    const { data } = await supabase
-      .from('practice_sessions')
-      .select('*')
-      .eq('user_id', uid)
-      .order('session_date', { ascending: false })
-      .limit(40);
-    if (data) setSessions(data);
-  };
+  const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    tuesday: true,
+    wednesday: true,
+    thursday: true,
+  });
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
+    supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setUserId(data.user.id);
-        await fetchSessions(data.user.id);
+        loadActivePlan(data.user.id);
       }
-      setLoading(false);
     });
-  }, []);
+  }, [loadActivePlan]);
 
   const onRefresh = async () => {
     if (!userId) return;
     setRefreshing(true);
-    await fetchSessions(userId);
+    await loadActivePlan(userId);
     setRefreshing(false);
   };
 
-  const todayDay = getTodayPracticeDay();
-  const todayRoutine = todayDay ? getRoutineForDay(todayDay) : null;
+  const toggle = (day: string) =>
+    setExpanded((s) => ({ ...s, [day]: !s[day] }));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0D0F0E' }}>
+      {/* Header */}
       <View
         style={{
           paddingHorizontal: 20,
@@ -78,26 +288,47 @@ export default function PracticeHistoryScreen() {
           paddingBottom: 14,
           borderBottomWidth: 1,
           borderBottomColor: '#2A2E2C',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
         }}
       >
-        <Text
-          style={{
-            fontFamily: 'DMMono_500Medium',
-            fontSize: 10,
-            color: '#4ADE80',
-            letterSpacing: 3,
-            textTransform: 'uppercase',
-            marginBottom: 4,
-          }}
+        <View>
+          <Text
+            style={{
+              fontFamily: 'DMMono_500Medium',
+              fontSize: 10,
+              color: '#4ADE80',
+              letterSpacing: 3,
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Yardage Book
+          </Text>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#F0F2F0' }}>
+            My Plan
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)/practice/history')}
+          accessibilityLabel="View session history"
+          hitSlop={10}
         >
-          Practice Log
-        </Text>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#F0F2F0' }}>
-          Sessions
-        </Text>
+          <Text
+            style={{
+              fontFamily: 'DMMono_500Medium',
+              fontSize: 11,
+              color: '#8A8F8C',
+              letterSpacing: 1.5,
+            }}
+          >
+            HISTORY →
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {loading ? (
+      {loading && !activePlan ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color="#4ADE80" />
         </View>
@@ -108,123 +339,86 @@ export default function PracticeHistoryScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ADE80" />
           }
         >
-          {/* Start today's session CTA */}
-          {todayRoutine && (
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/practice/session',
-                  params: { day: todayRoutine.day },
-                })
-              }
-              accessibilityLabel="Start today's practice session"
+          {/* Plan source label */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 8 }}>
+            <View
               style={{
-                height: 50,
+                width: 6,
+                height: 6,
                 backgroundColor: '#4ADE80',
+              }}
+            />
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 10,
+                color: '#8A8F8C',
+                letterSpacing: 2,
+              }}
+            >
+              {activePlan?.generated_by === 'ai' ? 'AI · CUSTOM' : 'DEFAULT ROUTINE'}
+              {activePlan?.name ? ` · ${activePlan.name.toUpperCase()}` : ''}
+            </Text>
+          </View>
+
+          {/* Section A — Current Plan */}
+          {routine.map((day) => (
+            <DayCard
+              key={day.day}
+              day={day}
+              expanded={expanded[day.day] ?? true}
+              onToggle={() => toggle(day.day)}
+            />
+          ))}
+
+          {/* Section B — Build a New Plan */}
+          <View style={{ marginTop: 24 }}>
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 10,
+                color: '#8A8F8C',
+                letterSpacing: 2.5,
+                marginBottom: 8,
+              }}
+            >
+              CREATE / UPDATE
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/practice/build-plan')}
+              accessibilityLabel="Build a new AI practice plan"
+              style={{
+                height: 52,
+                borderWidth: 1,
+                borderColor: '#4ADE80',
                 borderRadius: 4,
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 20,
               }}
             >
               <Text
                 style={{
                   fontFamily: 'Outfit_700Bold',
                   fontSize: 14,
-                  color: '#0D0F0E',
+                  color: '#4ADE80',
                   letterSpacing: 1,
                 }}
               >
-                START {todayRoutine.day.toUpperCase()} SESSION
+                BUILD A NEW PLAN
               </Text>
             </TouchableOpacity>
-          )}
-
-          {/* Session list */}
-          {sessions.length === 0 ? (
-            <Card>
-              <Text
-                style={{
-                  fontFamily: 'Outfit_400Regular',
-                  fontSize: 14,
-                  color: '#8A8F8C',
-                  textAlign: 'center',
-                  paddingVertical: 20,
-                }}
-              >
-                No sessions logged yet.{'\n'}Start your first session above.
-              </Text>
-            </Card>
-          ) : (
-            sessions.map((session) => (
-              <Card key={session.id} style={{ marginBottom: 10 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: 'DMMono_500Medium',
-                        fontSize: 10,
-                        color: '#4ADE80',
-                        textTransform: 'uppercase',
-                        letterSpacing: 1.5,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {dayLabel(session.day_type)}
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: 'Outfit_700Bold',
-                        fontSize: 16,
-                        color: '#F0F2F0',
-                        marginBottom: 2,
-                      }}
-                    >
-                      {formatDate(session.session_date)}
-                    </Text>
-                    {session.notes ? (
-                      <Text
-                        style={{
-                          fontFamily: 'Outfit_400Regular',
-                          fontSize: 12,
-                          color: '#8A8F8C',
-                          marginTop: 4,
-                        }}
-                        numberOfLines={2}
-                      >
-                        {session.notes}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {session.overall_quality && (
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text
-                        style={{
-                          fontFamily: 'DMMono_500Medium',
-                          fontSize: 26,
-                          color: qualityColor(session.overall_quality),
-                          lineHeight: 30,
-                        }}
-                      >
-                        {session.overall_quality}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: 'DMMono_400Regular',
-                          fontSize: 9,
-                          color: '#4A4E4C',
-                          textTransform: 'uppercase',
-                          letterSpacing: 1,
-                        }}
-                      >
-                        /5
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </Card>
-            ))
-          )}
+            <Text
+              style={{
+                fontFamily: 'Outfit_400Regular',
+                fontSize: 12,
+                color: '#4A4E4C',
+                marginTop: 8,
+                lineHeight: 17,
+              }}
+            >
+              Generate a custom plan from your handicap, goals, available days, and weak areas. Your current plan is archived, never deleted.
+            </Text>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>

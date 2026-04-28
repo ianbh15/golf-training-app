@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 
 export default function SignupScreen() {
@@ -28,7 +29,12 @@ export default function SignupScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const emailRedirectTo = Linking.createURL('/(auth)/login');
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo },
+    });
     setLoading(false);
 
     if (error) {
