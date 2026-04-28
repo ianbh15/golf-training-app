@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { usePlanStore } from '../../../lib/store/planStore';
+import { useDrillStore } from '../../../lib/store/drillStore';
 import type { DayRoutine } from '../../../constants/routine';
 
 const GOAL_OPTIONS = [
@@ -42,6 +43,7 @@ function isDayRoutineArray(v: unknown): v is DayRoutine[] {
 
 export default function BuildPlanScreen() {
   const { saveAiPlan } = usePlanStore();
+  const { drills, fetchDrills } = useDrillStore();
 
   const [handicap, setHandicap] = useState('');
   const [goals, setGoals] = useState<string[]>([]);
@@ -50,6 +52,12 @@ export default function BuildPlanScreen() {
   const [weaknesses, setWeaknesses] = useState('');
   const [planName, setPlanName] = useState('');
   const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) fetchDrills(data.user.id);
+    });
+  }, [fetchDrills]);
 
   const toggleGoal = (g: string) =>
     setGoals((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
@@ -75,6 +83,14 @@ export default function BuildPlanScreen() {
       }
 
       // Call ai-coach Edge Function with type=plan_generation
+      const customDrills = drills.map((d) => ({
+        name: d.name,
+        durationMinutes: d.duration_minutes,
+        category: d.category,
+        description: d.description,
+        neverCut: d.never_cut,
+      }));
+
       const { data, error } = await supabase.functions.invoke('ai-coach', {
         body: {
           type: 'plan_generation',
@@ -84,6 +100,7 @@ export default function BuildPlanScreen() {
             daysPerWeek,
             sessionMinutes,
             weaknesses: weaknesses.trim() || null,
+            customDrills: customDrills.length > 0 ? customDrills : undefined,
           },
         },
       });

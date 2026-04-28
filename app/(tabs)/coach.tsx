@@ -18,6 +18,7 @@ import {
 } from '../../lib/aiHelpers';
 import { Card } from '../../components/ui/Card';
 import { SectionHeader } from '../../components/ui/SectionHeader';
+import { notifyWeeklySummaryReady } from '../../lib/notifications';
 import type { AiInsight } from '../../lib/types/database';
 
 function formatDate(iso: string): string {
@@ -138,6 +139,7 @@ export default function CoachScreen() {
       if (insight) {
         setWeeklyInsight(insight);
         setAllInsights((prev) => [insight, ...prev]);
+        notifyWeeklySummaryReady().catch(() => {});
       }
     } finally {
       setGeneratingWeekly(false);
