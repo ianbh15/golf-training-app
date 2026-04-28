@@ -310,22 +310,40 @@ export default function PracticePlanScreen() {
             My Plan
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push('/(tabs)/practice/history')}
-          accessibilityLabel="View session history"
-          hitSlop={10}
-        >
-          <Text
-            style={{
-              fontFamily: 'DMMono_500Medium',
-              fontSize: 11,
-              color: '#8A8F8C',
-              letterSpacing: 1.5,
-            }}
+        <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/practice/drills')}
+            accessibilityLabel="Open drill library"
+            hitSlop={10}
           >
-            HISTORY →
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 11,
+                color: '#4ADE80',
+                letterSpacing: 1.5,
+              }}
+            >
+              DRILLS
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/practice/history')}
+            accessibilityLabel="View session history"
+            hitSlop={10}
+          >
+            <Text
+              style={{
+                fontFamily: 'DMMono_500Medium',
+                fontSize: 11,
+                color: '#8A8F8C',
+                letterSpacing: 1.5,
+              }}
+            >
+              HISTORY →
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading && !activePlan ? (

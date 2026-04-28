@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import {
@@ -13,6 +13,8 @@ import {
   Outfit_700Bold,
 } from '@expo-google-fonts/outfit';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
+import { schedulePracticeReminders } from '../lib/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,8 +30,20 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
+      // Request permissions and schedule weekly practice reminders
+      schedulePracticeReminders().catch(() => {});
     }
   }, [fontsLoaded]);
+
+  // Navigate to the right screen when the user taps a notification
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const screen = response.notification.request.content.data?.screen;
+      if (screen === 'practice') router.push('/(tabs)/practice');
+      if (screen === 'coach') router.push('/(tabs)/coach');
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded) return null;
 

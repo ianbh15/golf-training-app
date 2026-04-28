@@ -102,6 +102,20 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['practice_plans']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['practice_plans']['Insert']>;
       };
+      custom_drills: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          duration_minutes: number;
+          description: string | null;
+          category: string;
+          never_cut: boolean;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['custom_drills']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['custom_drills']['Insert']>;
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -116,3 +130,4 @@ export type Round = Database['public']['Tables']['rounds']['Row'];
 export type AiInsight = Database['public']['Tables']['ai_insights']['Row'];
 export type HandicapEntry = Database['public']['Tables']['handicap_history']['Row'];
 export type PracticePlan = Database['public']['Tables']['practice_plans']['Row'];
+export type CustomDrill = Database['public']['Tables']['custom_drills']['Row'];

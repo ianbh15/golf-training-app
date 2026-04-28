@@ -85,13 +85,20 @@ serve(async (req: Request) => {
         daysPerWeek,
         sessionMinutes,
         weaknesses,
+        customDrills,
       }: {
         handicap?: number;
         goals?: string[];
         daysPerWeek?: number;
         sessionMinutes?: number;
         weaknesses?: string;
+        customDrills?: { name: string; durationMinutes: number; category: string; description?: string | null; neverCut: boolean }[];
       } = context ?? {};
+
+      const drillsSection = customDrills && customDrills.length > 0
+        ? `\nCustom drills from the golfer's library (incorporate these into appropriate blocks where relevant; mark neverCut drills accordingly):
+${customDrills.map((d) => `- ${d.name} (${d.durationMinutes} min, ${d.category}${d.neverCut ? ', NEVER CUT' : ''}${d.description ? `: ${d.description}` : ''})`).join('\n')}\n`
+        : '';
 
       const userPrompt = `Build a custom weekly practice plan for this golfer.
 
@@ -100,7 +107,7 @@ Primary goals: ${goals?.join(', ') || 'general improvement'}
 Days available per week: ${daysPerWeek ?? 3}
 Session length: ${sessionMinutes ?? 40} minutes per session
 Specific weaknesses: ${weaknesses || 'none specified'}
-
+${drillsSection}
 ${PLAN_JSON_SHAPE}
 
 Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approximately ${sessionMinutes ?? 40} minutes. Tailor day focuses and blocks to the goals and weaknesses listed.`;
