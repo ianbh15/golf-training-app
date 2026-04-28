@@ -328,7 +328,7 @@ export default function CoachScreen() {
                             letterSpacing: 1,
                           }}
                         >
-                          GENERATE THIS WEEK'S SUMMARY
+                          GENERATE THIS WEEK{"'"}S SUMMARY
                         </Text>
                       )}
                     </TouchableOpacity>
