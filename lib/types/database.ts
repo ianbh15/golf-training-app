@@ -89,6 +89,19 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['handicap_history']['Row'], 'id'>;
         Update: Partial<Database['public']['Tables']['handicap_history']['Insert']>;
       };
+      practice_plans: {
+        Row: {
+          id: string;
+          user_id: string;
+          created_at: string;
+          is_active: boolean;
+          generated_by: 'default' | 'ai';
+          name: string | null;
+          plan_json: Json;
+        };
+        Insert: Omit<Database['public']['Tables']['practice_plans']['Row'], 'id' | 'created_at'>;
+        Update: Partial<Database['public']['Tables']['practice_plans']['Insert']>;
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -102,3 +115,4 @@ export type SessionBlock = Database['public']['Tables']['session_blocks']['Row']
 export type Round = Database['public']['Tables']['rounds']['Row'];
 export type AiInsight = Database['public']['Tables']['ai_insights']['Row'];
 export type HandicapEntry = Database['public']['Tables']['handicap_history']['Row'];
+export type PracticePlan = Database['public']['Tables']['practice_plans']['Row'];
