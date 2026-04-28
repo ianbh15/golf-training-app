@@ -133,7 +133,7 @@ export default function RoundsHistoryScreen() {
                   paddingVertical: 20,
                 }}
               >
-                No rounds logged yet.{'\n'}Tap "+ LOG ROUND" to add your first.
+                No rounds logged yet.{'\n'}Tap {'"'}+ LOG ROUND{'"'} to add your first.
               </Text>
             </Card>
           ) : (
@@ -254,7 +254,7 @@ export default function RoundsHistoryScreen() {
                     }}
                     numberOfLines={2}
                   >
-                    "{round.key_moment}"
+                    {'"'}{round.key_moment}{'"'}
                   </Text>
                 ) : null}
               </Card>
