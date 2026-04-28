@@ -1,4 +1,4 @@
-name: EAS Build & Deploy
+name: Deploy
 
 on:
   push:
@@ -24,8 +24,10 @@ on:
           - production
 
 jobs:
-  build:
-    name: EAS Build
+  # ── Push to main: fast OTA update (JS-only changes) ──
+  ota-update:
+    name: EAS Update (OTA)
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,24 +47,44 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build on EAS (Android — Preview)
-        if: github.event_name == 'push'
-        run: eas build --platform android --profile preview --non-interactive
+      - name: Publish OTA update to preview
+        run: eas update --branch preview --message "${{ github.event.head_commit.message }}" --non-interactive
 
-      - name: Build on EAS (Manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+  # ── Manual trigger: native build (use when adding native deps or bumping app version) ──
+  build:
+    name: EAS Build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build on EAS
         run: |
           eas build \
             --platform ${{ github.event.inputs.platform }} \
             --profile ${{ github.event.inputs.profile }} \
             --non-interactive
 
-  # ── Supabase Edge Functions deploy ──
+  # ── Supabase Edge Functions deploy on every push to main ──
   deploy-edge-functions:
     name: Deploy Supabase Edge Functions
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: build
     steps:
       - uses: actions/checkout@v4
 
