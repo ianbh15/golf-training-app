@@ -15,11 +15,12 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { schedulePracticeReminders } from '../lib/notifications';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     DMMono_400Regular,
     DMMono_500Medium,
     Outfit_400Regular,
@@ -27,28 +28,35 @@ export default function RootLayout() {
     Outfit_700Bold,
   });
 
+  // Hide splash as soon as we've either loaded fonts or failed — never leave it up forever.
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-      // Request permissions and schedule weekly practice reminders
-      schedulePracticeReminders().catch(() => {});
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+      // Schedule notifications opportunistically; never let it crash the app.
+      schedulePracticeReminders().catch((e) => {
+        console.warn('[GoLo] schedulePracticeReminders failed:', e);
+      });
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
   // Navigate to the right screen when the user taps a notification
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const screen = response.notification.request.content.data?.screen;
-      if (screen === 'practice') router.push('/(tabs)/practice');
-      if (screen === 'coach') router.push('/(tabs)/coach');
-    });
-    return () => sub.remove();
+    try {
+      const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const screen = response.notification.request.content.data?.screen;
+        if (screen === 'practice') router.push('/(tabs)/practice');
+        if (screen === 'coach') router.push('/(tabs)/coach');
+      });
+      return () => sub.remove();
+    } catch (e) {
+      console.warn('[GoLo] notification listener setup failed:', e);
+    }
   }, []);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="light" backgroundColor="#0D0F0E" />
       <Stack
         screenOptions={{
@@ -59,6 +67,6 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </ErrorBoundary>
   );
 }

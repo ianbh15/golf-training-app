@@ -6,16 +6,23 @@
 // Function (supabase/functions/ai-coach) before production.
 // ============================================================
 
-import Anthropic from '@anthropic-ai/sdk';
+// NOTE: `@anthropic-ai/sdk` is loaded lazily via require() so that any
+// initialization issues (Node-only globals, missing polyfills, etc.) cannot
+// crash the JS bundle on app startup. The SDK only loads when an AI call is
+// actually made.
 
-let _client: Anthropic | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: any | null = null;
 
-function getClient(): Anthropic {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getClient(): any {
   if (!_client) {
     const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
     if (!apiKey) {
       throw new Error('[GoLo] EXPO_PUBLIC_ANTHROPIC_API_KEY not set. Move to Edge Function before production.');
     }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Anthropic = require('@anthropic-ai/sdk').default;
     _client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   }
   return _client;
