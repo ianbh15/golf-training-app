@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -28,16 +28,24 @@ export default function RootLayout() {
     Outfit_700Bold,
   });
 
-  // Hide splash as soon as we've either loaded fonts or failed — never leave it up forever.
+  // Safety net: force-render after 3s even if useFonts never resolves.
+  // Otherwise a hung font load = black splash forever.
+  const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    const t = setTimeout(() => setTimedOut(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const ready = fontsLoaded || !!fontError || timedOut;
+
+  useEffect(() => {
+    if (ready) {
       SplashScreen.hideAsync().catch(() => {});
-      // Schedule notifications opportunistically; never let it crash the app.
       schedulePracticeReminders().catch((e) => {
         console.warn('[GoLo] schedulePracticeReminders failed:', e);
       });
     }
-  }, [fontsLoaded, fontError]);
+  }, [ready]);
 
   // Navigate to the right screen when the user taps a notification
   useEffect(() => {
@@ -53,7 +61,7 @@ export default function RootLayout() {
     }
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!ready) return null;
 
   return (
     <ErrorBoundary>
