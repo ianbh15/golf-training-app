@@ -40,4 +40,13 @@ jobs:
         env:
           BRANCH: ${{ github.event.inputs.branch || 'preview' }}
           MESSAGE: ${{ github.event.head_commit.message || format('Manual update from {0}', github.sha) }}
-        run: eas update --branch "$BRANCH" --message "$MESSAGE" --non-interactive
+          # EXPO_PUBLIC_* are read at bundle time. EAS-dashboard env vars are
+          # picked up automatically when --environment matches the branch;
+          # without that, the bundle ships with empty values and the app
+          # falls back to the placeholder Supabase URL → all requests fail.
+        run: |
+          eas update \
+            --branch "$BRANCH" \
+            --environment "$BRANCH" \
+            --message "$MESSAGE" \
+            --non-interactive
