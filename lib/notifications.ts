@@ -1,16 +1,25 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Show alerts for foreground notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+/**
+ * Installs the foreground notification handler.
+ * Must be called from a useEffect (NOT at module init) so a native
+ * failure can't crash the JS bundle before React mounts.
+ */
+export function installNotificationHandler(): void {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('[GoLo] installNotificationHandler failed:', e);
+  }
+}
 
 const PRACTICE_IDS = [
   'practice-reminder-tue',

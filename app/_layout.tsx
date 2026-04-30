@@ -14,7 +14,7 @@ import {
 } from '@expo-google-fonts/outfit';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
-import { schedulePracticeReminders } from '../lib/notifications';
+import { schedulePracticeReminders, installNotificationHandler } from '../lib/notifications';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -41,6 +41,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (ready) {
       SplashScreen.hideAsync().catch(() => {});
+      installNotificationHandler();
       schedulePracticeReminders().catch((e) => {
         console.warn('[GoLo] schedulePracticeReminders failed:', e);
       });
