@@ -158,19 +158,24 @@ function BlockCard({
       <TouchableOpacity
         onPress={onToggleExpand}
         activeOpacity={0.8}
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          paddingVertical: 4,
+        }}
       >
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             {blockDraft.completed && (
-              <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 12, color: '#4ADE80' }}>
+              <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 14, color: '#4ADE80' }}>
                 ✓
               </Text>
             )}
             <Text
               style={{
                 fontFamily: 'Outfit_700Bold',
-                fontSize: 16,
+                fontSize: 19,
                 color: blockDraft.completed ? '#4ADE80' : '#F0F2F0',
               }}
             >
@@ -200,7 +205,7 @@ function BlockCard({
               </View>
             )}
           </View>
-          <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 11, color: '#4A4E4C' }}>
+          <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 13, color: '#8A8F8C' }}>
             {block.durationMin} min
           </Text>
         </View>
@@ -208,7 +213,7 @@ function BlockCard({
           {blockDraft.completed && blockDraft.metricResult && (
             <MetricBadge value={blockDraft.metricResult} met />
           )}
-          <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 14, color: '#4A4E4C' }}>
+          <Text style={{ fontFamily: 'DMMono_400Regular', fontSize: 20, color: '#8A8F8C' }}>
             {isExpanded ? '−' : '+'}
           </Text>
         </View>
@@ -216,14 +221,15 @@ function BlockCard({
 
       {/* Expanded content */}
       {isExpanded && !blockDraft.completed && (
-        <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: '#2A2E2C', paddingTop: 14 }}>
+        <View style={{ marginTop: 18, borderTopWidth: 1, borderTopColor: '#2A2E2C', paddingTop: 18 }}>
           {/* Description */}
           <Text
             style={{
               fontFamily: 'Outfit_400Regular',
-              fontSize: 13,
+              fontSize: 15,
               color: '#8A8F8C',
-              marginBottom: 12,
+              marginBottom: 16,
+              lineHeight: 22,
               fontStyle: 'italic',
             }}
           >
@@ -232,52 +238,65 @@ function BlockCard({
 
           {/* Drills checklist */}
           <SectionHeader title="Drills" />
-          {block.drills.map((drill, i) => (
-            <TouchableOpacity
-              key={i}
-              onPress={() => toggleDrill(block.key, i)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: 10,
-                marginBottom: 10,
-              }}
-              accessibilityLabel={`Toggle drill: ${drill}`}
-            >
-              <View
+          {block.drills.map((drill, i) => {
+            const checked = blockDraft.checkedDrills[i];
+            return (
+              <TouchableOpacity
+                key={i}
+                onPress={() => toggleDrill(block.key, i)}
+                activeOpacity={0.7}
                 style={{
-                  width: 18,
-                  height: 18,
-                  borderWidth: 1,
-                  borderRadius: 2,
-                  borderColor: blockDraft.checkedDrills[i] ? '#4ADE80' : '#2A2E2C',
-                  backgroundColor: blockDraft.checkedDrills[i]
-                    ? 'rgba(74,222,128,0.15)'
-                    : 'transparent',
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 2,
-                  flexShrink: 0,
+                  gap: 14,
+                  paddingVertical: 12,
+                  paddingHorizontal: 4,
+                  borderBottomWidth: i < block.drills.length - 1 ? 1 : 0,
+                  borderBottomColor: '#2A2E2C',
                 }}
+                accessibilityLabel={`Toggle drill: ${drill}`}
               >
-                {blockDraft.checkedDrills[i] && (
-                  <Text style={{ fontSize: 10, color: '#4ADE80' }}>✓</Text>
-                )}
-              </View>
-              <Text
-                style={{
-                  fontFamily: 'Outfit_400Regular',
-                  fontSize: 13,
-                  color: blockDraft.checkedDrills[i] ? '#4A4E4C' : '#F0F2F0',
-                  flex: 1,
-                  lineHeight: 20,
-                  textDecorationLine: blockDraft.checkedDrills[i] ? 'line-through' : 'none',
-                }}
-              >
-                {drill}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderWidth: 2,
+                    borderRadius: 4,
+                    borderColor: checked ? '#4ADE80' : '#4A4E4C',
+                    backgroundColor: checked ? '#4ADE80' : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {checked && (
+                    <Text
+                      style={{
+                        fontFamily: 'Outfit_700Bold',
+                        fontSize: 18,
+                        lineHeight: 20,
+                        color: '#0D0F0E',
+                      }}
+                    >
+                      ✓
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  style={{
+                    fontFamily: checked ? 'Outfit_400Regular' : 'Outfit_600SemiBold',
+                    fontSize: 17,
+                    color: checked ? '#4A4E4C' : '#F0F2F0',
+                    flex: 1,
+                    lineHeight: 26,
+                    textDecorationLine: checked ? 'line-through' : 'none',
+                  }}
+                >
+                  {drill}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
 
           {/* Sequence toggle */}
           {block.swingKeyCritical && (
@@ -301,15 +320,15 @@ function BlockCard({
           />
 
           {/* Notes */}
-          <Text style={[labelStyle, { marginTop: 8 }]}>Notes</Text>
+          <Text style={[labelStyle, { marginTop: 12 }]}>Notes</Text>
           <TextInput
             value={blockDraft.notes}
             onChangeText={(t) => updateBlock(block.key, { notes: t })}
             placeholder="Optional..."
             placeholderTextColor="#4A4E4C"
             multiline
-            numberOfLines={2}
-            style={[inputStyle, { height: 64, textAlignVertical: 'top', paddingTop: 10 }]}
+            numberOfLines={3}
+            style={[inputStyle, { height: 96, textAlignVertical: 'top', paddingTop: 12, fontSize: 16 }]}
           />
 
           {/* Complete button */}
@@ -317,11 +336,11 @@ function BlockCard({
             onPress={handleComplete}
             accessibilityLabel={`Complete ${block.name} block`}
             style={{
-              marginTop: 14,
-              height: 44,
-              borderWidth: 1,
+              marginTop: 18,
+              height: 56,
+              borderWidth: 2,
               borderColor: '#4ADE80',
-              borderRadius: 4,
+              borderRadius: 6,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -329,9 +348,9 @@ function BlockCard({
             <Text
               style={{
                 fontFamily: 'Outfit_700Bold',
-                fontSize: 13,
+                fontSize: 15,
                 color: '#4ADE80',
-                letterSpacing: 1,
+                letterSpacing: 2,
               }}
             >
               COMPLETE BLOCK
@@ -606,15 +625,15 @@ export default function SessionScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
           {/* Swing Key card */}
-          <Card style={{ marginBottom: 16, borderColor: '#2A2E2C' }}>
+          <Card style={{ marginBottom: 18, borderColor: '#2A2E2C' }}>
             <Text
               style={{
                 fontFamily: 'DMMono_500Medium',
-                fontSize: 10,
+                fontSize: 11,
                 color: '#4ADE80',
                 textTransform: 'uppercase',
                 letterSpacing: 2,
-                marginBottom: 6,
+                marginBottom: 10,
               }}
             >
               Swing Key
@@ -622,9 +641,9 @@ export default function SessionScreen() {
             <Text
               style={{
                 fontFamily: 'Outfit_400Regular',
-                fontSize: 14,
+                fontSize: 16,
                 color: '#F0F2F0',
-                lineHeight: 22,
+                lineHeight: 26,
               }}
             >
               {routine.swingKey}
@@ -690,9 +709,9 @@ export default function SessionScreen() {
 
 const labelStyle = {
   fontFamily: 'Outfit_400Regular' as const,
-  fontSize: 12,
+  fontSize: 13,
   color: '#8A8F8C',
-  marginBottom: 6,
+  marginBottom: 8,
   textTransform: 'uppercase' as const,
   letterSpacing: 1,
 };
@@ -702,9 +721,9 @@ const inputStyle = {
   borderWidth: 1,
   borderColor: '#2A2E2C',
   borderRadius: 4,
-  height: 44,
-  paddingHorizontal: 12,
+  height: 52,
+  paddingHorizontal: 14,
   fontFamily: 'Outfit_400Regular' as const,
-  fontSize: 14,
+  fontSize: 16,
   color: '#F0F2F0',
 };
