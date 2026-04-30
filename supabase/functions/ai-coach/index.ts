@@ -1,21 +1,58 @@
 // Supabase Edge Function: ai-coach
 // Deploy with: supabase functions deploy ai-coach
 //
-// This is the server-side Claude API proxy.
-// ANTHROPIC_API_KEY is stored as a Supabase secret (never client-side).
-// Set it with: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+// ANTHROPIC_API_KEY stored as a Supabase secret — never client-side.
+// Set with: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const API_URL = 'https://api.anthropic.com/v1/messages';
 
-const SYSTEM_PROMPT = `You are a performance coach for a 3-handicap golfer named Ian.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// ── Model routing ─────────────────────────────────────────
+// Haiku for short, quick-turnaround outputs.
+// Sonnet for analysis, plans, and technical coaching.
+function modelFor(type: string): string {
+  return type === 'pre_session' || type === 'chat'
+    ? 'claude-haiku-4-5'
+    : 'claude-sonnet-4-6';
+}
+
+// ── System prompts ────────────────────────────────────────
+
+const COACH_PROMPT = `You are a performance coach for Ian, a 3-handicap golfer using the GoLo app.
 You have access to his practice session logs and round data.
-Be direct, specific, and data-driven. Do not explain fundamentals.
-Reference actual metrics from his sessions (e.g. Pressure Finish scores, sequence quality, SG numbers).
-Keep responses under 250 words unless asked a specific question.
-Ian's swing key focus: lower body fires first, hips rotate before shoulders and hands move.
-Tone: direct, analytical, no fluff — like a Tour caddie who has studied the data.`;
+Be direct, specific, and data-driven. Do not explain golf fundamentals.
+Reference actual metrics from his sessions (e.g. Pressure Finish scores, sequence quality %, SG numbers).
+Keep responses under 250 words unless the user asks a specific question.
+Ian's swing key: lower body fires first — hips bump and rotate before shoulders and hands move.
+Reference practice blocks by name: Wedge Calibration, Staircase Drill, Pressure Finish, Distance Control Putting, Chipping Variety, Make Zone Putting, Quick Groove, Gap Yardage Wedges, 5-Hole Simulation, Clutch Putting.`;
+
+const CADDIE_PROMPT = `You are Ian's on-course caddie — analytical, terse, zero fluff.
+Ian is a 3-handicap. His tendency under pressure: overswing, lose sequence, early extension.
+His swing key: lower body initiates, hips rotate before shoulders and hands.
+Your job: shot selection, course management, target lines, pre-shot routine cues.
+Reference his SG splits and key moments from recent rounds when available.
+Be concrete — name the club, name the target, name the number.
+Max 150 words.`;
+
+const SWING_COACH_PROMPT = `You are Ian's swing coach. You have reviewed every practice session's block metrics.
+Ian's primary focus: lower body initiates — hips bump and rotate before shoulders and hands move.
+When sequence_felt_right % drops below 60%, that is the first thing to address.
+Reference specific block results by name: Pressure Finish scores, Staircase Drill reps, Quick Groove feel, sequence quality %.
+Give one concrete adjustment. Not general encouragement.
+Max 200 words unless asked for more.`;
+
+const CLUB_FITTER_PROMPT = `You are Ian's club fitter. You analyze his distance data from practice blocks and rounds.
+Key sources: Wedge Calibration metric_result, Gap Yardage Wedges metric_result, Distance Control Putting, sg_approach from rounds.
+Identify distance gaps, yardage inconsistency, wedge calibration drift.
+Be specific — name the yardages. "You carry your 52° at 102 yards but have a 14-yard gap before your PW" not "consider your wedge gaps."
+Max 200 words unless asked for more.`;
 
 const PLAN_SYSTEM_PROMPT = `You are a golf practice plan architect.
 You design structured, drill-based weekly practice plans for skilled golfers.
@@ -59,15 +96,82 @@ Rules:
 - Mark exactly one or two blocks per day with "neverCut": true — the highest-priority block(s).
 - Drill arrays should have 2–5 short imperative bullets.`;
 
+function getSystemPrompt(type: string): string {
+  switch (type) {
+    case 'caddie': return CADDIE_PROMPT;
+    case 'swing_coach': return SWING_COACH_PROMPT;
+    case 'club_fitter': return CLUB_FITTER_PROMPT;
+    case 'plan_generation': return PLAN_SYSTEM_PROMPT;
+    default: return COACH_PROMPT;
+  }
+}
+
+// ── Default prompt builders (used when userMessage not provided) ──
+function buildDefaultPrompt(type: string, context: object): string {
+  const json = JSON.stringify(context, null, 2);
+  switch (type) {
+    case 'weekly_summary':
+      return `Weekly performance data:\n${json}\n\nIdentify the 1-2 biggest scoring leaks and give specific practice adjustments for next week. Reference block metrics by name.`;
+    case 'pre_session':
+      return `Upcoming session data and recent history:\n${json}\n\nGive a 2-3 sentence focus cue for today's session based on recent patterns. Be prescriptive, not motivational.`;
+    case 'round_debrief':
+      return `Round data:\n${json}\n\nDebrief this round. Where were shots lost? What should be prioritized in practice this week? Reference the SG data if available.`;
+    case 'caddie':
+      return `Recent round and practice data:\n${json}\n\nWhat should I focus on for on-course management based on recent patterns?`;
+    case 'swing_coach':
+      return `Practice session data:\n${json}\n\nAnalyze my ball striking and sequence quality. What should I focus on?`;
+    case 'club_fitter':
+      return `Distance and yardage data:\n${json}\n\nAnalyze my distance gaps and yardage control.`;
+    default:
+      return json;
+  }
+}
+
+// ── max_tokens per type ───────────────────────────────────
+function maxTokensFor(type: string): number {
+  if (type === 'plan_generation') return 4000;
+  if (type === 'pre_session') return 200;
+  if (type === 'caddie') return 300;
+  return 600;
+}
+
+// ── Core Anthropic call with prompt caching on system ─────
+async function callAnthropic(
+  type: string,
+  userPrompt: string
+): Promise<string> {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+    },
+    body: JSON.stringify({
+      model: modelFor(type),
+      max_tokens: maxTokensFor(type),
+      system: [
+        {
+          type: 'text',
+          text: getSystemPrompt(type),
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message ?? `Anthropic API error ${response.status}`);
+  }
+  return data?.content?.[0]?.text ?? '';
+}
+
 serve(async (req: Request) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    });
+    return new Response('ok', { headers: CORS_HEADERS });
   }
 
   try {
@@ -77,7 +181,7 @@ serve(async (req: Request) => {
 
     const { type, context, userMessage } = await req.json();
 
-    // ── Plan generation: structured JSON output ──
+    // ── Plan generation: structured JSON output ──────────
     if (type === 'plan_generation') {
       const {
         handicap,
@@ -96,11 +200,10 @@ serve(async (req: Request) => {
       } = context ?? {};
 
       const drillsSection = customDrills && customDrills.length > 0
-        ? `\nCustom drills from the golfer's library (incorporate these into appropriate blocks where relevant; mark neverCut drills accordingly):
-${customDrills.map((d) => `- ${d.name} (${d.durationMinutes} min, ${d.category}${d.neverCut ? ', NEVER CUT' : ''}${d.description ? `: ${d.description}` : ''})`).join('\n')}\n`
+        ? `\nCustom drills from the golfer's library (incorporate these into appropriate blocks where relevant; mark neverCut drills accordingly):\n${customDrills.map((d) => `- ${d.name} (${d.durationMinutes} min, ${d.category}${d.neverCut ? ', NEVER CUT' : ''}${d.description ? `: ${d.description}` : ''})`).join('\n')}\n`
         : '';
 
-      const userPrompt = `Build a custom weekly practice plan for this golfer.
+      const planPrompt = `Build a custom weekly practice plan for this golfer.
 
 Handicap: ${handicap ?? 'unspecified'}
 Primary goals: ${goals?.join(', ') || 'general improvement'}
@@ -112,25 +215,7 @@ ${PLAN_JSON_SHAPE}
 
 Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approximately ${sessionMinutes ?? 40} minutes. Tailor day focuses and blocks to the goals and weaknesses listed.`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          system: PLAN_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
-      });
-
-      const data = await response.json();
-      const raw: string = data?.content?.[0]?.text ?? '';
-
-      // Strip accidental markdown fences if Claude added any
+      const raw = await callAnthropic('plan_generation', planPrompt);
       const cleaned = raw
         .trim()
         .replace(/^```json\s*/i, '')
@@ -144,72 +229,28 @@ Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approx
       } catch {
         return new Response(
           JSON.stringify({ error: 'Model did not return valid JSON', raw }),
-          {
-            status: 502,
-            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-          }
+          { status: 502, headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } }
         );
       }
 
       return new Response(JSON.stringify({ plan }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
     }
 
-    // ── Text-content insights (existing behavior) ──
-    let userPrompt: string;
-    if (userMessage) {
-      userPrompt = userMessage;
-    } else {
-      const json = JSON.stringify(context, null, 2);
-      switch (type) {
-        case 'weekly_summary':
-          userPrompt = `Weekly performance data:\n${json}\n\nIdentify the 1-2 biggest scoring leaks and give specific practice adjustments for next week. Reference block metrics by name.`;
-          break;
-        case 'pre_session':
-          userPrompt = `Upcoming session data and recent history:\n${json}\n\nGive a 2-3 sentence focus cue for today's session based on recent patterns. Be prescriptive, not motivational.`;
-          break;
-        case 'round_debrief':
-          userPrompt = `Round data:\n${json}\n\nDebrief this round. Where were shots lost? What should be prioritized in practice this week? Reference the SG data if available.`;
-          break;
-        default:
-          userPrompt = json;
-      }
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    const data = await response.json();
-    const content = data?.content?.[0]?.text ?? '';
+    // ── All other insight types ──────────────────────────
+    const userPrompt = userMessage ?? buildDefaultPrompt(type, context ?? {});
+    const content = await callAnthropic(type, userPrompt);
 
     return new Response(JSON.stringify({ content }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   } catch (err) {
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }),
       {
         status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       }
     );
   }
