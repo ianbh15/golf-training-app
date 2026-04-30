@@ -7,40 +7,44 @@ type SequenceToggleProps = {
 };
 
 export function SequenceToggle({ value, onChange }: SequenceToggleProps) {
+  const yesSelected = value === true;
+  const noSelected = value === false;
+
   return (
-    <View style={{ marginVertical: 8 }}>
+    <View style={{ marginVertical: 12 }}>
       <Text
         style={{
           fontFamily: 'Outfit_400Regular',
-          fontSize: 12,
+          fontSize: 13,
           color: '#8A8F8C',
-          marginBottom: 8,
+          marginBottom: 10,
           textTransform: 'uppercase',
           letterSpacing: 1,
         }}
       >
         Sequence felt right?
       </Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
         <TouchableOpacity
           onPress={() => onChange(true)}
           accessibilityLabel="Sequence felt right: Yes"
           style={{
             flex: 1,
-            height: 38,
+            height: 56,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 1,
-            borderRadius: 4,
-            borderColor: value === true ? '#4ADE80' : '#2A2E2C',
-            backgroundColor: value === true ? 'rgba(74, 222, 128, 0.12)' : '#1A1D1B',
+            borderWidth: 2,
+            borderRadius: 6,
+            borderColor: yesSelected ? '#4ADE80' : '#2A2E2C',
+            backgroundColor: yesSelected ? '#4ADE80' : '#1A1D1B',
           }}
         >
           <Text
             style={{
-              fontFamily: 'Outfit_600SemiBold',
-              fontSize: 13,
-              color: value === true ? '#4ADE80' : '#8A8F8C',
+              fontFamily: 'Outfit_700Bold',
+              fontSize: 18,
+              letterSpacing: 2,
+              color: yesSelected ? '#0D0F0E' : '#8A8F8C',
             }}
           >
             YES
@@ -51,20 +55,21 @@ export function SequenceToggle({ value, onChange }: SequenceToggleProps) {
           accessibilityLabel="Sequence felt right: No"
           style={{
             flex: 1,
-            height: 38,
+            height: 56,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 1,
-            borderRadius: 4,
-            borderColor: value === false ? '#F59E0B' : '#2A2E2C',
-            backgroundColor: value === false ? 'rgba(245, 158, 11, 0.12)' : '#1A1D1B',
+            borderWidth: 2,
+            borderRadius: 6,
+            borderColor: noSelected ? '#F59E0B' : '#2A2E2C',
+            backgroundColor: noSelected ? '#F59E0B' : '#1A1D1B',
           }}
         >
           <Text
             style={{
-              fontFamily: 'Outfit_600SemiBold',
-              fontSize: 13,
-              color: value === false ? '#F59E0B' : '#8A8F8C',
+              fontFamily: 'Outfit_700Bold',
+              fontSize: 18,
+              letterSpacing: 2,
+              color: noSelected ? '#0D0F0E' : '#8A8F8C',
             }}
           >
             NO
