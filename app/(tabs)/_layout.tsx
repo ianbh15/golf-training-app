@@ -4,19 +4,33 @@ import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 
-// ── Tab bar icons (monochrome text-based — caddie book style) ──
-
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
+// ── Tab bar label (monochrome text-based — caddie book style) ──
+//
+// We intentionally render the label via `tabBarLabel` (and suppress the icon)
+// because React Navigation wraps `tabBarIcon` output in a fixed-width 31px
+// container — which truncated our text labels to "TO…", "CO…", "ST…" in the
+// previous implementation. `tabBarLabel`, on the other hand, sits inside the
+// flex:1 tab item and lays out at full width.
+function TabLabel({ label, focused }: { label: string; focused: boolean }) {
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 10 }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 6,
+      }}
+    >
       <Text
         numberOfLines={1}
+        allowFontScaling={false}
         style={{
           fontFamily: 'DMMono_500Medium',
           fontSize: 11,
           color: focused ? '#4ADE80' : '#4A4E4C',
           textTransform: 'uppercase',
           letterSpacing: 1,
+          textAlign: 'center',
         }}
       >
         {label}
@@ -53,6 +67,10 @@ export default function TabLayout() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
+  // ~76px of content area above the safe-area inset gives a comfortable thumb
+  // target on iPhone 12+ size devices while remaining compact on smaller ones.
+  const TAB_BAR_CONTENT_HEIGHT = 76;
+
   return (
     <Tabs
       screenOptions={{
@@ -61,51 +79,55 @@ export default function TabLayout() {
           backgroundColor: '#0D0F0E',
           borderTopWidth: 1,
           borderTopColor: '#2A2E2C',
-          height: 64 + insets.bottom,
+          height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 0,
         },
         tabBarItemStyle: {
+          flex: 1,
           paddingVertical: 0,
         },
         tabBarActiveTintColor: '#4ADE80',
         tabBarInactiveTintColor: '#4A4E4C',
-        tabBarShowLabel: false,
+        // We render the label ourselves via `tabBarLabel` and hide the icon.
+        tabBarShowLabel: true,
+        tabBarIcon: () => null,
+        tabBarIconStyle: { display: 'none' },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Today',
-          tabBarIcon: ({ focused }) => <TabIcon label="Today" focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Today" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="practice"
         options={{
           title: 'Practice',
-          tabBarIcon: ({ focused }) => <TabIcon label="Practice" focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Practice" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="rounds"
         options={{
           title: 'Rounds',
-          tabBarIcon: ({ focused }) => <TabIcon label="Rounds" focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Rounds" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="coach"
         options={{
           title: 'Coach',
-          tabBarIcon: ({ focused }) => <TabIcon label="Coach" focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Coach" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
           title: 'Stats',
-          tabBarIcon: ({ focused }) => <TabIcon label="Stats" focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Stats" focused={focused} />,
         }}
       />
     </Tabs>
