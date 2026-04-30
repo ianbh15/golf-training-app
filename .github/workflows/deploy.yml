@@ -1,14 +1,15 @@
 name: EAS Build & Deploy
 
+# Native rebuilds are MANUAL only — push-to-main publishes an OTA update
+# instead (see ota-update.yml). Use this workflow when you change a native
+# dep or config plugin and need a fresh APK / IPA.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       platform:
         description: 'Platform to build'
         required: true
-        default: 'all'
+        default: 'android'
         type: choice
         options:
           - all
@@ -45,12 +46,7 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build on EAS (Android — Preview)
-        if: github.event_name == 'push'
-        run: eas build --platform android --profile preview --non-interactive
-
-      - name: Build on EAS (Manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Build on EAS
         run: |
           eas build \
             --platform ${{ github.event.inputs.platform }} \
@@ -61,7 +57,6 @@ jobs:
   deploy-edge-functions:
     name: Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     needs: build
     steps:
       - uses: actions/checkout@v4
