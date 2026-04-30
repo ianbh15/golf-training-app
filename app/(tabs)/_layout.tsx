@@ -16,6 +16,7 @@ function TabLabel({ label, focused }: { label: string; focused: boolean }) {
     <View
       style={{
         flex: 1,
+        width: '100%',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 6,
