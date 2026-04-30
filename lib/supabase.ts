@@ -2,10 +2,6 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-// NOTE: Replace this with the generated types from:
-//   npx supabase gen types typescript --project-id YOUR_PROJECT_ID > lib/types/database.ts
-// Once done, re-add the Database generic: createClient<Database>(...)
-
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
@@ -15,8 +11,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Use placeholders if env vars missing so createClient doesn't throw on
+// invalid URL parsing — the app will still render and show network errors
+// downstream rather than crashing the bundle on init.
+const safeUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const safeKey = supabaseAnonKey || 'placeholder-anon-key';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const supabase = createClient<any>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<any>(safeUrl, safeKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
