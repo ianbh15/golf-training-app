@@ -11,9 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { generateInsight } from '../../lib/claude';
+import type { InsightType } from '../../lib/claude';
 import {
   buildWeeklySummaryContext,
+  buildCaddieContext,
+  buildSwingCoachContext,
+  buildClubFitterContext,
   generateAndSaveInsight,
 } from '../../lib/aiHelpers';
 import { Card } from '../../components/ui/Card';
@@ -42,12 +45,36 @@ const TYPE_LABELS: Record<string, string> = {
   weekly_summary: 'Weekly',
   pre_session: 'Pre-Session',
   round_debrief: 'Round Debrief',
+  caddie: 'Caddie',
+  swing_coach: 'Swing Coach',
+  club_fitter: 'Club Fitter',
+  chat: 'Chat',
 };
 
 const TYPE_COLORS: Record<string, string> = {
   weekly_summary: '#4ADE80',
   pre_session: '#4ADE80',
   round_debrief: '#F59E0B',
+  caddie: '#60A5FA',
+  swing_coach: '#A78BFA',
+  club_fitter: '#FB923C',
+  chat: '#4A4E4C',
+};
+
+type Persona = 'coach' | 'caddie' | 'swing_coach' | 'club_fitter';
+
+const PERSONAS: { key: Persona; label: string; insightType: InsightType }[] = [
+  { key: 'coach',       label: 'COACH',  insightType: 'chat'        },
+  { key: 'caddie',      label: 'CADDIE', insightType: 'caddie'      },
+  { key: 'swing_coach', label: 'SWING',  insightType: 'swing_coach' },
+  { key: 'club_fitter', label: 'FITTER', insightType: 'club_fitter' },
+];
+
+const PERSONA_DISPLAY: Record<Persona, string> = {
+  coach: 'Coach',
+  caddie: 'Caddie',
+  swing_coach: 'Swing Coach',
+  club_fitter: 'Club Fitter',
 };
 
 // ──────────────────────────────────────────────────────────
@@ -99,6 +126,7 @@ export default function CoachScreen() {
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Chat state
+  const [persona, setPersona] = useState<Persona>('coach');
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatQuestion, setChatQuestion] = useState<string | null>(null);
@@ -157,30 +185,45 @@ export default function CoachScreen() {
     setChatLoading(true);
 
     try {
-      // Build context: last 4 rounds + last 3 sessions
-      const [roundsRes, sessionsRes] = await Promise.all([
-        supabase
-          .from('rounds')
-          .select('*')
-          .eq('user_id', userId)
-          .order('played_date', { ascending: false })
-          .limit(4),
-        supabase
-          .from('practice_sessions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('session_date', { ascending: false })
-          .limit(3),
-      ]);
+      const { insightType } = PERSONAS.find((p) => p.key === persona)!;
 
-      const context = {
-        last_4_rounds: roundsRes.data ?? [],
-        last_3_sessions: sessionsRes.data ?? [],
-      };
+      let context: object;
+      if (persona === 'caddie') {
+        context = await buildCaddieContext(userId);
+      } else if (persona === 'swing_coach') {
+        context = await buildSwingCoachContext(userId);
+      } else if (persona === 'club_fitter') {
+        context = await buildClubFitterContext(userId);
+      } else {
+        const [roundsRes, sessionsRes] = await Promise.all([
+          supabase
+            .from('rounds')
+            .select('*')
+            .eq('user_id', userId)
+            .order('played_date', { ascending: false })
+            .limit(4),
+          supabase
+            .from('practice_sessions')
+            .select('*')
+            .eq('user_id', userId)
+            .order('session_date', { ascending: false })
+            .limit(3),
+        ]);
+        context = {
+          last_4_rounds: roundsRes.data ?? [],
+          last_3_sessions: sessionsRes.data ?? [],
+        };
+      }
 
-      const userMessage = `Context:\n${JSON.stringify(context, null, 2)}\n\nQuestion: ${question}`;
-      const response = await generateInsight('chat', context, userMessage);
-      setChatResponse(response || 'Coach unavailable — try again.');
+      const userMessage = `${JSON.stringify(context, null, 2)}\n\nQuestion: ${question}`;
+      const insight = await generateAndSaveInsight(userId, insightType, context, userMessage);
+
+      if (insight) {
+        setChatResponse(insight.content);
+        setAllInsights((prev) => [insight, ...prev.filter((i) => i.id !== insight.id)]);
+      } else {
+        setChatResponse(`${PERSONA_DISPLAY[persona]} unavailable — try again.`);
+      }
     } catch {
       setChatResponse('Coach unavailable — check your connection.');
     } finally {
@@ -407,6 +450,46 @@ export default function CoachScreen() {
               {/* ── 3. Ask the Coach ── */}
               <SectionHeader title="Ask the Coach" />
               <Card style={{ marginBottom: 20 }}>
+                {/* Persona picker */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 6,
+                    marginBottom: 12,
+                  }}
+                >
+                  {PERSONAS.map((p) => {
+                    const active = persona === p.key;
+                    return (
+                      <TouchableOpacity
+                        key={p.key}
+                        onPress={() => setPersona(p.key)}
+                        style={{
+                          flex: 1,
+                          height: 32,
+                          borderWidth: 1,
+                          borderColor: active ? '#4ADE80' : '#2A2E2C',
+                          borderRadius: 4,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: active ? 'rgba(74,222,128,0.08)' : 'transparent',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: 'DMMono_500Medium',
+                            fontSize: 9,
+                            color: active ? '#4ADE80' : '#4A4E4C',
+                            letterSpacing: 1,
+                          }}
+                        >
+                          {p.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: chatQuestion ? 16 : 0 }}>
                   <TextInput
                     value={chatInput}
@@ -510,7 +593,7 @@ export default function CoachScreen() {
                             opacity: 0.7,
                           }}
                         >
-                          Coach
+                          {PERSONA_DISPLAY[persona]}
                         </Text>
                         <Text
                           style={{

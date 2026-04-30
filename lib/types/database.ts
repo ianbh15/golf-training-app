@@ -72,9 +72,10 @@ export interface Database {
           id: string;
           user_id: string;
           generated_at: string;
-          insight_type: 'weekly_summary' | 'pre_session' | 'round_debrief';
+          insight_type: 'weekly_summary' | 'pre_session' | 'round_debrief' | 'caddie' | 'swing_coach' | 'club_fitter' | 'chat';
           content: string;
           context_json: Json | null;
+          context_hash: string | null;
         };
         Insert: Omit<Database['public']['Tables']['ai_insights']['Row'], 'id' | 'generated_at'>;
         Update: Partial<Database['public']['Tables']['ai_insights']['Insert']>;

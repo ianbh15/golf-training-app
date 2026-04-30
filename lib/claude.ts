@@ -1,84 +1,29 @@
 // ============================================================
-// GoLo — Claude AI Coach Wrapper
-//
-// SECURITY NOTE: EXPO_PUBLIC_ prefix exposes the key to the
-// client bundle. Move all Claude calls to a Supabase Edge
-// Function (supabase/functions/ai-coach) before production.
+// GoLo — AI Coach client
+// Routes all Claude calls through the Supabase Edge Function
+// (supabase/functions/ai-coach) so the API key never touches
+// the client bundle.
 // ============================================================
 
-// NOTE: `@anthropic-ai/sdk` is loaded lazily via require() so that any
-// initialization issues (Node-only globals, missing polyfills, etc.) cannot
-// crash the JS bundle on app startup. The SDK only loads when an AI call is
-// actually made.
+import { supabase } from './supabase';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _client: any | null = null;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getClient(): any {
-  if (!_client) {
-    const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error('[GoLo] EXPO_PUBLIC_ANTHROPIC_API_KEY not set. Move to Edge Function before production.');
-    }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Anthropic = require('@anthropic-ai/sdk').default;
-    _client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-  }
-  return _client;
-}
-
-// ──────────────────────────────────────────────────────────
-// Types
-// ──────────────────────────────────────────────────────────
-
-export type InsightType = 'weekly_summary' | 'pre_session' | 'round_debrief' | 'chat';
-
-const SYSTEM_PROMPT = `You are a performance coach for a 3-handicap golfer using the GoLo app.
-You have access to their practice session logs and round data.
-Be direct, specific, and data-driven. Do not explain golf fundamentals.
-Reference actual metrics from their sessions (e.g. Pressure Finish scores, sequence quality %, SG numbers).
-Keep responses under 250 words unless the user asks a specific question.
-The golfer's primary swing key: lower body fires first — hips bump and rotate before shoulders and hands move.
-When referencing practice blocks use their actual names: Wedge Calibration, Staircase Drill, Pressure Finish, Distance Control Putting, Chipping Variety, Make Zone Putting, Quick Groove, Gap Yardage Wedges, 5-Hole Simulation, Clutch Putting.`;
-
-// ──────────────────────────────────────────────────────────
-// Prompt builders
-// ──────────────────────────────────────────────────────────
-
-function buildPrompt(type: InsightType, context: object): string {
-  const json = JSON.stringify(context, null, 2);
-  switch (type) {
-    case 'weekly_summary':
-      return `Weekly performance data:\n${json}\n\nIdentify the 1-2 biggest scoring leaks and give specific practice adjustments for next week. Reference actual block names and metric results where available.`;
-    case 'pre_session':
-      return `Upcoming session and recent history:\n${json}\n\nGive a 2-3 sentence focus cue for today's session based on recent patterns. Be specific to the blocks they are about to do.`;
-    case 'round_debrief':
-      return `Round data:\n${json}\n\nDebrief this round. Where were shots lost? What should be prioritized in practice this week? Reference strokes gained data if available.`;
-    default:
-      return json;
-  }
-}
-
-// ──────────────────────────────────────────────────────────
-// Main export
-// ──────────────────────────────────────────────────────────
+export type InsightType =
+  | 'weekly_summary'
+  | 'pre_session'
+  | 'round_debrief'
+  | 'caddie'
+  | 'swing_coach'
+  | 'club_fitter'
+  | 'chat';
 
 export async function generateInsight(
   type: InsightType,
   context: object,
   userMessage?: string
 ): Promise<string> {
-  const client = getClient();
-  const userPrompt = userMessage ?? buildPrompt(type, context);
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 600,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userPrompt }],
+  const { data, error } = await supabase.functions.invoke('ai-coach', {
+    body: { type, context, userMessage },
   });
-
-  const block = response.content[0];
-  return block.type === 'text' ? block.text : '';
+  if (error) throw error;
+  return (data as { content?: string })?.content ?? '';
 }
