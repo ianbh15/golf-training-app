@@ -1,0 +1,43 @@
+name: EAS OTA Update
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'EAS update branch (matches the channel in eas.json)'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  update:
+    name: Publish OTA update
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish OTA update
+        env:
+          BRANCH: ${{ github.event.inputs.branch || 'preview' }}
+          MESSAGE: ${{ github.event.head_commit.message || format('Manual update from {0}', github.sha) }}
+        run: eas update --branch "$BRANCH" --message "$MESSAGE" --non-interactive
