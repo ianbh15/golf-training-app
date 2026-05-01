@@ -4,10 +4,7 @@
 // ANTHROPIC_API_KEY stored as a Supabase secret — never client-side.
 // Set with: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const API_URL = 'https://api.anthropic.com/v1/messages';
+import Anthropic from 'npm:@anthropic-ai/sdk@0.91.1';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -135,50 +132,41 @@ function maxTokensFor(type: string): number {
   return 600;
 }
 
-// ── Core Anthropic call with prompt caching on system ─────
+// ── Core Anthropic call via SDK with prompt caching on system ─────
 async function callAnthropic(
+  client: Anthropic,
   type: string,
   userPrompt: string
 ): Promise<string> {
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'prompt-caching-2024-07-31',
-    },
-    body: JSON.stringify({
-      model: modelFor(type),
-      max_tokens: maxTokensFor(type),
-      system: [
-        {
-          type: 'text',
-          text: getSystemPrompt(type),
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
+  const message = await client.messages.create({
+    model: modelFor(type),
+    max_tokens: maxTokensFor(type),
+    system: [
+      {
+        type: 'text',
+        text: getSystemPrompt(type),
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
+    messages: [{ role: 'user', content: userPrompt }],
   });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.error?.message ?? `Anthropic API error ${response.status}`);
-  }
-  return data?.content?.[0]?.text ?? '';
+  const block = message.content.find((b) => b.type === 'text');
+  return block?.type === 'text' ? block.text : '';
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
   try {
-    if (!ANTHROPIC_API_KEY) {
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY secret is not set');
     }
 
+    const client = new Anthropic({ apiKey });
     const { type, context, userMessage } = await req.json();
 
     // ── Plan generation: structured JSON output ──────────
@@ -215,7 +203,7 @@ ${PLAN_JSON_SHAPE}
 
 Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approximately ${sessionMinutes ?? 40} minutes. Tailor day focuses and blocks to the goals and weaknesses listed.`;
 
-      const raw = await callAnthropic('plan_generation', planPrompt);
+      const raw = await callAnthropic(client, 'plan_generation', planPrompt);
       const cleaned = raw
         .trim()
         .replace(/^```json\s*/i, '')
@@ -240,7 +228,7 @@ Generate exactly ${daysPerWeek ?? 3} day(s). Each day's blocks must total approx
 
     // ── All other insight types ──────────────────────────
     const userPrompt = userMessage ?? buildDefaultPrompt(type, context ?? {});
-    const content = await callAnthropic(type, userPrompt);
+    const content = await callAnthropic(client, type, userPrompt);
 
     return new Response(JSON.stringify({ content }), {
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
