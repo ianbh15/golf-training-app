@@ -14,7 +14,8 @@ export type InsightType =
   | 'caddie'
   | 'swing_coach'
   | 'club_fitter'
-  | 'chat';
+  | 'chat'
+  | 'plan_generation';
 
 export async function generateInsight(
   type: InsightType,
